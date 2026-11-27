@@ -12,6 +12,15 @@ constexpr int BUFFER_SIZE = 512;
 
 int32_t samples[BUFFER_SIZE];
 
+constexpr float BEAT_THRESHOLD = 3.0f;
+constexpr float MIN_AUDIO_LEVEL = 80000.0f;
+constexpr float SMOOTHING = 0.03f;
+constexpr unsigned long MIN_BEAT_INTERVAL_MS = 120;
+
+double averageEnergy = 0;
+unsigned long lastBeatTime = 0;
+bool wasAboveThreshold = false;
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -61,14 +70,36 @@ void loop() {
     }
 
     int count = bytesRead / sizeof(int32_t);
+
+    double sum = 0;
     double sumSquares = 0;
+
+    int32_t minSample = INT32_MAX;
+    int32_t maxSample = INT32_MIN;
 
     for (int i = 0; i < count; i++) {
         int32_t sample = samples[i] >> 8;
+
+        sum += sample;
         sumSquares += (double)sample * sample;
+
+        if (sample < minSample) minSample = sample;
+        if (sample > maxSample) maxSample = sample;
     }
 
+    double mean = sum / count;
     double rms = sqrt(sumSquares / count);
 
-    Serial.printf("Audio level: %.2f\n", rms);
+    double variance = sumSquares / count - mean * mean;
+    double acRms = sqrt(fmax(0.0, variance));
+
+    Serial.printf(
+        "DC: %9.0f | RMS: %9.0f | AC RMS: %9.0f"
+        " | Min: %9ld | Max: %9ld\n",
+        mean,
+        rms,
+        acRms,
+        (long)minSample,
+        (long)maxSample
+    );
 }
